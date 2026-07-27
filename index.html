@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Strike Baits — Учёт склада</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a8fd1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Strike Baits">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -102,8 +109,8 @@ tr:last-child td { border-bottom: none; }
       <div style="font-size:12px;color:var(--sb-muted);">Вход в систему учёта</div>
     </div>
     <div id="loginError" style="display:none;background:var(--sb-danger-bg);color:var(--sb-danger-text);padding:8px 12px;border-radius:var(--radius-md);font-size:13px;margin-bottom:12px;"></div>
-    <div class="form-row"><label>Логин</label><input type="text" id="login-username" autocomplete="username"></div>
-    <div class="form-row"><label>Пароль</label><input type="password" id="login-password" autocomplete="current-password"></div>
+    <div class="form-row"><label>Логин</label><input type="text" id="login-username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="form-row"><label>Пароль</label><input type="password" id="login-password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="doLogin()">Войти</button>
   </div>
 </div>
@@ -310,12 +317,15 @@ let selectedLblId = null;
 
 // ==== СЕТЕВОЙ СЛОЙ ====
 async function api(path, options = {}) {
+  const token = localStorage.getItem('sb_token');
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(API_BASE + path, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options,
   });
   if (res.status === 401) {
+    localStorage.removeItem('sb_token');
     showLogin();
     throw new Error('Требуется вход');
   }
@@ -325,6 +335,10 @@ async function api(path, options = {}) {
 }
 
 // ==== АВТОРИЗАЦИЯ ====
+// Используем токен в localStorage вместо cookie — на мобильных браузерах
+// (особенно iOS Safari) cookie между разными доменами часто блокируются
+// защитой от межсайтового отслеживания, а localStorage-токен работает
+// одинаково надёжно везде.
 function showLogin() {
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('mainApp').style.display = 'none';
@@ -340,7 +354,14 @@ async function doLogin() {
   const errEl = document.getElementById('loginError');
   errEl.style.display = 'none';
   try {
-    await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    const res = await fetch(API_BASE + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Ошибка входа');
+    localStorage.setItem('sb_token', data.token);
     showApp();
     await loadAllData();
     renderDashboard();
@@ -351,11 +372,13 @@ async function doLogin() {
 }
 
 async function doLogout() {
-  await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  localStorage.removeItem('sb_token');
   showLogin();
 }
 
 async function checkSession() {
+  const token = localStorage.getItem('sb_token');
+  if (!token) { showLogin(); return; }
   try {
     await api('/api/auth/me');
     showApp();
