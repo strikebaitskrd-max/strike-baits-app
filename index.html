@@ -96,6 +96,43 @@ tr:last-child td { border-bottom: none; }
 @media print {
   .header, .nav, .modal-bg { display: none !important; }
 }
+
+/* ==== АДАПТАЦИЯ ПОД МОБИЛЬНЫЕ ЭКРАНЫ ==== */
+@media (max-width: 640px) {
+  .header { padding: 8px 12px; gap: 6px; }
+  .logo-img { width: 32px; height: 32px; }
+  .brand { font-size: 14px; }
+  .header-actions { gap: 4px; }
+  .header-actions .btn { padding: 6px 9px; font-size: 12px; }
+  .nav-btn { padding: 9px 11px; font-size: 12px; }
+  .content { padding: 12px; }
+
+  .grid-2 { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .metric-card { padding: 10px 12px; }
+  .metric-val { font-size: 18px; }
+
+  .card { padding: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 600px; }
+
+  .modal { padding: 16px; max-width: 100%; }
+  .modal h3 { font-size: 14px; }
+  .form-row input, .form-row select, .form-row textarea { font-size: 16px; } /* 16px не даёт iOS зумить страницу при фокусе на поле */
+
+  .inv-parties { grid-template-columns: 1fr; gap: 10px; }
+  .recipe-row { grid-template-columns: 1fr 64px 26px; gap: 4px; }
+
+  .btn-icon { min-width: 34px; min-height: 34px; justify-content: center; }
+  .row-actions { gap: 6px; }
+
+  .search-bar.sticky-toolbar { padding: 8px 12px; margin: 0 -12px 12px -12px; flex-wrap: wrap; }
+  .search-bar.sticky-toolbar input { min-width: 140px; }
+
+  .invoice-preview { padding: 16px; font-size: 12px; }
+}
+
+@media (max-width: 380px) {
+  .header-actions .btn span.btn-label { display: none; }
+}
 </style>
 </head>
 <body>
@@ -122,8 +159,8 @@ tr:last-child td { border-bottom: none; }
       <div class="brand">Strike <span>Baits</span></div>
     </div>
     <div class="header-actions">
-      <button class="btn btn-sm" onclick="openModal('productionModal')">⚗ Выпуск</button>
-      <button class="btn btn-primary btn-sm" onclick="openModal('shipmentModal')">🚚 Отгрузка</button>
+      <button class="btn btn-sm" onclick="openModal('productionModal')">⚗ <span class="btn-label">Выпуск</span></button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('shipmentModal')">🚚 <span class="btn-label">Отгрузка</span></button>
       <button class="btn btn-sm btn-icon" onclick="doLogout()" title="Выйти">⏻</button>
     </div>
   </div>
