@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strike Baits — Учёт склада</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --sb-blue: #1a8fd1; --sb-dark: #0d1b2a;
+  --sb-card: #ffffff; --sb-border: #e5e5e0; --sb-text: #1a1a1a;
+  --sb-muted: #6b6b66; --sb-bg: #f5f4ef;
+  --sb-danger-bg: #fcebeb; --sb-danger-text: #a32d2d;
+  --sb-success-bg: #eaf3de; --sb-success-text: #3b6d11;
+  --sb-warn-bg: #faeeda; --sb-warn-text: #854f0b;
+  --radius-md: 8px; --radius-lg: 12px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--sb-bg); color: var(--sb-text); }
+.app { display: flex; flex-direction: column; min-height: 100vh; max-width: 900px; margin: 0 auto; }
+.header { background: var(--sb-card); border-bottom: 1px solid var(--sb-border); padding: 10px 16px; display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; }
+.logo-area { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 140px; }
+.logo-img { width: 40px; height: 40px; object-fit: contain; border-radius: 50%; flex-shrink: 0; }
+.brand { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; }
+.brand span { color: var(--sb-blue); }
+.header-actions { display: flex; gap: 6px; }
+.nav { display: flex; background: var(--sb-card); border-bottom: 1px solid var(--sb-border); overflow-x: auto; position: sticky; top: 61px; z-index: 90; }
+.nav-btn { padding: 10px 14px; font-size: 13px; color: var(--sb-muted); border: none; background: transparent; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+.nav-btn.active { color: var(--sb-blue); border-bottom-color: var(--sb-blue); font-weight: 600; }
+.content { padding: 16px; flex: 1; }
+.section { display: none; } .section.active { display: block; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.metric-card { background: var(--sb-card); border: 1px solid var(--sb-border); border-radius: var(--radius-lg); padding: 12px 14px; }
+.metric-label { font-size: 12px; color: var(--sb-muted); margin-bottom: 4px; }
+.metric-val { font-size: 22px; font-weight: 600; }
+.metric-val.blue { color: var(--sb-blue); } .metric-val.green { color: var(--sb-success-text); }
+.metric-val.red { color: var(--sb-danger-text); } .metric-val.amber { color: var(--sb-warn-text); }
+.card { background: var(--sb-card); border: 1px solid var(--sb-border); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 12px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.card-title { font-size: 14px; font-weight: 600; }
+table { width: 100%; font-size: 13px; border-collapse: collapse; }
+th { text-align: left; color: var(--sb-muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--sb-border); font-size: 12px; }
+td { padding: 6px 8px; border-bottom: 1px solid var(--sb-border); }
+tr:last-child td { border-bottom: none; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-ok { background: var(--sb-success-bg); color: var(--sb-success-text); }
+.badge-low { background: var(--sb-warn-bg); color: var(--sb-warn-text); }
+.badge-out { background: var(--sb-danger-bg); color: var(--sb-danger-text); }
+.btn { padding: 7px 14px; border-radius: var(--radius-md); font-size: 13px; cursor: pointer; border: 1px solid var(--sb-border); background: transparent; color: var(--sb-text); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.btn:hover { background: var(--sb-bg); } .btn-primary { background: var(--sb-blue); color: #fff; border-color: var(--sb-blue); }
+.btn-primary:hover { background: #1578b3; } .btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-danger { border-color: var(--sb-danger-text); color: var(--sb-danger-text); }
+.btn-icon { padding: 4px 6px; }
+.btn:disabled { opacity: 0.3; cursor: default; }
+.btn:disabled:hover { background: transparent; }
+.row-actions { display: flex; gap: 4px; align-items: center; }
+.selected-row { background: rgba(26,143,209,0.12) !important; }
+.selected-row td { border-bottom-color: rgba(26,143,209,0.3); }
+#raw-tbody tr, #prod-tbody tr, #lbl-tbody tr { cursor: pointer; }
+.modal-bg { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--sb-card); border-radius: var(--radius-lg); padding: 20px; width: 100%; max-width: 440px; max-height: 88vh; overflow-y: auto; }
+.modal h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+.form-row { margin-bottom: 12px; }
+.form-row label { display: block; font-size: 12px; color: var(--sb-muted); margin-bottom: 4px; }
+.form-row input, .form-row select, .form-row textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--sb-border); border-radius: var(--radius-md); font-size: 13px; background: var(--sb-bg); color: var(--sb-text); font-family: inherit; }
+.form-row textarea { resize: vertical; min-height: 60px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.search-bar { display: flex; gap: 8px; margin-bottom: 14px; }
+.search-bar input { flex: 1; padding: 8px 10px; border: 1px solid var(--sb-border); border-radius: var(--radius-md); font-size: 13px; background: var(--sb-bg); color: var(--sb-text); }
+.search-bar.sticky-toolbar { position: sticky; top: 105px; z-index: 80; background: var(--sb-card); margin: 0 -16px 14px -16px; padding: 10px 16px; border-bottom: 1px solid var(--sb-border); box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
+.progress-bar { height: 4px; background: var(--sb-bg); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+.progress-fill { height: 100%; border-radius: 2px; }
+.alert { padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; margin-bottom: 12px; }
+.alert-warn { background: var(--sb-warn-bg); color: var(--sb-warn-text); }
+.alert-info { background: #e6f1fb; color: #0c447c; }
+.empty-state { text-align: center; padding: 32px 16px; color: var(--sb-muted); font-size: 13px; }
+.cell-input { border: none; background: transparent; font-size: 13px; color: var(--sb-text); width: 100%; padding: 4px; border-radius: var(--radius-md); font-family: inherit; }
+.cell-input:hover { background: var(--sb-bg); }
+.cell-input:focus { background: var(--sb-bg); outline: 1px solid var(--sb-blue); }
+.cell-input.num { width: 70px; }
+.inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.inv-party h4 { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.inv-total { text-align: right; margin-top: 12px; font-size: 14px; }
+.inv-total strong { font-size: 17px; color: #0d1b2a; }
+.invoice-preview { background: #fff; color: #111; border-radius: var(--radius-lg); padding: 24px; font-size: 13px; border: 1px solid var(--sb-border); }
+.recipe-row { display: grid; grid-template-columns: 2fr 90px 28px; gap: 6px; margin-bottom: 6px; align-items: center; }
+.shortage { color: var(--sb-danger-text); font-weight: 600; }
+.ok-qty { color: var(--sb-success-text); }
+@media print {
+  .header, .nav, .modal-bg { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- Экран входа -->
+<div id="loginScreen" style="position:fixed;inset:0;background:var(--sb-bg);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:var(--sb-card);border:1px solid var(--sb-border);border-radius:var(--radius-lg);padding:32px 28px;width:100%;max-width:360px;">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:24px;">
+      <img id="loginLogo" style="width:56px;height:56px;object-fit:contain;border-radius:50%;" alt="Strike Baits">
+      <div style="font-size:17px;font-weight:600;">Strike <span style="color:var(--sb-blue);">Baits</span></div>
+      <div style="font-size:12px;color:var(--sb-muted);">Вход в систему учёта</div>
+    </div>
+    <div id="loginError" style="display:none;background:var(--sb-danger-bg);color:var(--sb-danger-text);padding:8px 12px;border-radius:var(--radius-md);font-size:13px;margin-bottom:12px;"></div>
+    <div class="form-row"><label>Логин</label><input type="text" id="login-username" autocomplete="username"></div>
+    <div class="form-row"><label>Пароль</label><input type="password" id="login-password" autocomplete="current-password"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="doLogin()">Войти</button>
+  </div>
+</div>
+
+<div class="app" id="mainApp" style="display:none;">
+  <div class="header">
+    <div class="logo-area">
+      <img class="logo-img" id="logoImg" alt="Strike Baits">
+      <div class="brand">Strike <span>Baits</span></div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-sm" onclick="openModal('productionModal')">⚗ Выпуск</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('shipmentModal')">🚚 Отгрузка</button>
+      <button class="btn btn-sm btn-icon" onclick="doLogout()" title="Выйти">⏻</button>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-btn active" onclick="switchTab('dashboard')" id="tab-dashboard">Главная</button>
+    <button class="nav-btn" onclick="switchTab('raw')" id="tab-raw">Сырьё</button>
+    <button class="nav-btn" onclick="switchTab('products')" id="tab-products">Продукция</button>
+    <button class="nav-btn" onclick="switchTab('labels')" id="tab-labels">Этикетки</button>
+    <button class="nav-btn" onclick="switchTab('history')" id="tab-history">История</button>
+    <button class="nav-btn" onclick="switchTab('invoices')" id="tab-invoices">Счета</button>
+    <button class="nav-btn" onclick="switchTab('finance')" id="tab-finance">Финансы</button>
+  </nav>
+
+  <div class="content">
+    <div class="section active" id="section-dashboard">
+      <div class="grid-2" id="dash-metrics"></div>
+      <div id="dash-alerts"></div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Последние операции</div></div>
+        <div id="dash-ops"></div>
+      </div>
+    </div>
+
+    <div class="section" id="section-raw">
+      <div class="search-bar sticky-toolbar" id="raw-toolbar">
+        <input type="text" placeholder="Поиск сырья..." id="raw-search" oninput="renderRaw()">
+        <button class="btn btn-sm" onclick="moveSelected('raw',-1)" title="Переместить выбранную позицию выше">▲</button>
+        <button class="btn btn-sm" onclick="moveSelected('raw',1)" title="Переместить выбранную позицию ниже">▼</button>
+        <button class="btn btn-primary" onclick="openModal('addRawModal')">+ Добавить</button>
+      </div>
+      <div style="font-size:12px;color:var(--sb-muted);margin-bottom:8px;">Кликните на строку, чтобы выбрать её, затем используйте стрелки выше для перемещения</div>
+      <div class="card"><table><thead><tr><th>Наименование</th><th>Остаток</th><th>Ед.</th><th>Мин.</th><th>Цена, ₽</th><th>Статус</th><th></th></tr></thead><tbody id="raw-tbody"></tbody></table></div>
+    </div>
+
+    <div class="section" id="section-products">
+      <div class="search-bar sticky-toolbar" id="products-toolbar">
+        <input type="text" placeholder="Поиск продукции..." id="prod-search" oninput="renderProducts()">
+        <button class="btn btn-sm" onclick="moveSelected('products',-1)" title="Переместить выбранную позицию выше">▲</button>
+        <button class="btn btn-sm" onclick="moveSelected('products',1)" title="Переместить выбранную позицию ниже">▼</button>
+        <button class="btn btn-primary" onclick="openModal('addProdModal')">+ Добавить</button>
+      </div>
+      <div style="font-size:12px;color:var(--sb-muted);margin-bottom:8px;">Кликните на строку, чтобы выбрать её, затем используйте стрелки выше для перемещения</div>
+      <div class="card"><table><thead><tr><th>Продукт</th><th>Остаток</th><th>Ед.</th><th>Рецептура</th><th></th></tr></thead><tbody id="prod-tbody"></tbody></table></div>
+    </div>
+
+    <div class="section" id="section-labels">
+      <div class="search-bar sticky-toolbar" id="labels-toolbar">
+        <input type="text" placeholder="Поиск этикеток..." id="lbl-search" oninput="renderLabels()">
+        <button class="btn btn-sm" onclick="moveSelected('labels',-1)" title="Переместить выбранную позицию выше">▲</button>
+        <button class="btn btn-sm" onclick="moveSelected('labels',1)" title="Переместить выбранную позицию ниже">▼</button>
+        <button class="btn btn-primary" onclick="openModal('addLblModal')">+ Добавить</button>
+      </div>
+      <div style="font-size:12px;color:var(--sb-muted);margin-bottom:8px;">Кликните на строку, чтобы выбрать её, затем используйте стрелки выше для перемещения</div>
+      <div class="card"><table><thead><tr><th>Этикетка</th><th>Остаток</th><th>Мин.</th><th>Статус</th><th></th></tr></thead><tbody id="lbl-tbody"></tbody></table></div>
+    </div>
+
+    <div class="section" id="section-history">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Журнал операций</div></div>
+        <table><thead><tr><th>Дата</th><th>Тип</th><th>Описание</th><th>Кол-во</th><th></th></tr></thead><tbody id="hist-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="section" id="section-invoices">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:14px;">
+        <button class="btn" onclick="openCompanyModal()">🏢 Реквизиты</button>
+        <button class="btn btn-primary" onclick="openModal('createInvoiceModal')">+ Новый счёт</button>
+      </div>
+      <div id="invoices-list"></div>
+    </div>
+
+    <div class="section" id="section-finance">
+      <div class="grid-2" id="finance-metrics"></div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Стоимость сырья на складе</div></div>
+        <table><thead><tr><th>Сырьё</th><th>Остаток</th><th>Цена, ₽</th><th>Сумма, ₽</th></tr></thead><tbody id="finance-raw-tbody"></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Себестоимость готовой продукции</div></div>
+        <table><thead><tr><th>Продукт</th><th>Остаток</th><th>Себест. за ед., ₽</th><th>Сумма, ₽</th></tr></thead><tbody id="finance-prod-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="addRawModal"><div class="modal">
+  <h3>Добавить сырьё</h3>
+  <div class="form-row"><label>Наименование</label><input type="text" id="raw-name-in" placeholder="Мука рыбная Мурманская"></div>
+  <div class="form-row"><label>Количество</label><input type="number" id="raw-qty-in" placeholder="0"></div>
+  <div class="form-row"><label>Единица</label><select id="raw-unit-in"><option>кг</option><option>л</option><option>шт</option><option>г</option></select></div>
+  <div class="form-row"><label>Минимальный остаток</label><input type="number" id="raw-min-in" placeholder="0"></div>
+  <div class="form-row"><label>Цена за единицу, ₽</label><input type="number" id="raw-price-in" placeholder="0"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('addRawModal')">Отмена</button><button class="btn btn-primary" onclick="saveRaw()">Сохранить</button></div>
+</div></div>
+
+<div class="modal-bg" id="addProdModal"><div class="modal">
+  <h3>Добавить продукт</h3>
+  <div class="form-row"><label>Название</label><input type="text" id="prod-name-in" placeholder="Бойлы Z-1"></div>
+  <div class="form-row"><label>Начальный остаток</label><input type="number" id="prod-qty-in" placeholder="0"></div>
+  <div class="form-row"><label>Единица</label><select id="prod-unit-in"><option>кг</option><option>шт</option><option>упак.</option></select></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('addProdModal')">Отмена</button><button class="btn btn-primary" onclick="saveProd()">Сохранить</button></div>
+</div></div>
+
+<div class="modal-bg" id="addLblModal"><div class="modal">
+  <h3>Добавить этикетку</h3>
+  <div class="form-row"><label>Название</label><input type="text" id="lbl-name-in" placeholder="Z-1"></div>
+  <div class="form-row"><label>Остаток (шт)</label><input type="number" id="lbl-qty-in" placeholder="0"></div>
+  <div class="form-row"><label>Минимальный остаток</label><input type="number" id="lbl-min-in" placeholder="0"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('addLblModal')">Отмена</button><button class="btn btn-primary" onclick="saveLbl()">Сохранить</button></div>
+</div></div>
+
+<div class="modal-bg" id="recipeModal"><div class="modal">
+  <h3>Рецептура: <span id="recipe-prod-name"></span></h3>
+  <div style="font-size:12px;color:var(--sb-muted);margin-bottom:10px;">Расход сырья в граммах на 1 кг продукта</div>
+  <div id="recipe-rows"></div>
+  <button class="btn btn-sm" onclick="addRecipeRow()" style="margin:8px 0 4px;">+ Добавить сырьё</button>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('recipeModal')">Отмена</button><button class="btn btn-primary" onclick="saveRecipe()">Сохранить рецептуру</button></div>
+</div></div>
+
+<div class="modal-bg" id="productionModal"><div class="modal">
+  <h3>⚗ Выпуск продукции</h3>
+  <div class="form-row"><label>Продукт</label><select id="prod-select" onchange="updateProductionPreview()"><option value="">— выберите —</option></select></div>
+  <div class="form-row"><label>Количество к выпуску</label><input type="number" id="prod-qty-make" placeholder="0" oninput="updateProductionPreview()"></div>
+  <div id="production-preview"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('productionModal')">Отмена</button><button class="btn btn-primary" onclick="processProduction()">✓ Выпустить</button></div>
+</div></div>
+
+<div class="modal-bg" id="shipmentModal"><div class="modal">
+  <h3>🚚 Оформить отгрузку</h3>
+  <div class="form-row"><label>Клиент</label><input type="text" id="ship-client" placeholder="ООО Рыболов"></div>
+  <div class="form-row"><label>Продукт</label><select id="ship-product"><option value="">— выберите —</option></select></div>
+  <div class="form-row"><label>Количество</label><input type="number" id="ship-qty" placeholder="0"></div>
+  <div class="form-row"><label>Этикетка</label><select id="ship-label"><option value="">— без этикетки —</option></select></div>
+  <div class="form-row"><label>Этикеток на единицу</label><input type="number" id="ship-lbl-per" value="1"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('shipmentModal')">Отмена</button><button class="btn btn-primary" onclick="processShipment()">✓ Провести</button></div>
+</div></div>
+
+<div class="modal-bg" id="companyModal"><div class="modal">
+  <h3>🏢 Реквизиты компании</h3>
+  <div class="form-row"><label>Название</label><input type="text" id="co-name"></div>
+  <div class="form-row"><label>Адрес</label><input type="text" id="co-address"></div>
+  <div class="form-row"><label>ИНН</label><input type="text" id="co-inn"></div>
+  <div class="form-row"><label>КПП</label><input type="text" id="co-kpp"></div>
+  <div class="form-row"><label>Банк</label><input type="text" id="co-bank"></div>
+  <div class="form-row"><label>Р/с</label><input type="text" id="co-rs"></div>
+  <div class="form-row"><label>БИК</label><input type="text" id="co-bik"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('companyModal')">Отмена</button><button class="btn btn-primary" onclick="saveCompany()">Сохранить</button></div>
+</div></div>
+
+<div class="modal-bg" id="createInvoiceModal"><div class="modal">
+  <h3>Новый счёт</h3>
+  <div class="form-row"><label>Покупатель</label><input type="text" id="inv-buyer" placeholder="ООО Рыболов"></div>
+  <div class="form-row"><label>Адрес</label><input type="text" id="inv-buyer-addr" placeholder="г. Москва, ул. Рыбная 1"></div>
+  <div id="inv-items-list"></div>
+  <button class="btn btn-sm" onclick="addInvItem()" style="margin-bottom:10px;">+ Позиция</button>
+  <div class="form-row"><label>Примечание</label><textarea id="inv-note" placeholder="По договору №..."></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('createInvoiceModal')">Отмена</button><button class="btn btn-primary" onclick="createInvoice()">Создать счёт</button></div>
+</div></div>
+
+<div class="modal-bg" id="viewInvoiceModal"><div class="modal" style="max-width:560px;">
+  <div id="invoice-preview-content"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('viewInvoiceModal')">Закрыть</button><button class="btn btn-primary" onclick="window.print()">🖨 Печать / PDF</button></div>
+</div></div>
+
+<div class="modal-bg" id="restockModal"><div class="modal">
+  <h3>Пополнить запас</h3>
+  <div id="restock-name-display" style="font-weight:600;margin-bottom:12px;"></div>
+  <div class="form-row"><label>Добавить количество</label><input type="number" id="restock-qty" placeholder="0" min="0"></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('restockModal')">Отмена</button><button class="btn btn-primary" onclick="saveRestock()">Пополнить</button></div>
+</div></div>
+
+<script>
+// ==== НАСТРОЙКА ====
+// Укажите здесь адрес вашего backend на Timeweb App Platform, например:
+// const API_BASE = 'https://strike-baits-api.timeweb.app';
+const API_BASE = 'https://strikebaitskrd-max-strike-baits-backend-7ae0.twc1.net';
+
+const LOGO_B64 = "data:image/png;base64,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";
+document.getElementById('logoImg').src = LOGO_B64;
+document.getElementById('loginLogo').src = LOGO_B64;
+
+// ==== ЛОКАЛЬНЫЙ КЭШ ДАННЫХ (заполняется с сервера) ====
+let state = { raw: [], products: [], labels: [], history: [], invoices: [], company: {} };
+let recipeDraft = [];
+let editingProductId = null;
+let currentInvoiceId = null;
+let selectedRawId = null;
+let selectedProdId = null;
+let selectedLblId = null;
+
+// ==== СЕТЕВОЙ СЛОЙ ====
+async function api(path, options = {}) {
+  const res = await fetch(API_BASE + path, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (res.status === 401) {
+    showLogin();
+    throw new Error('Требуется вход');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Ошибка запроса');
+  return data;
+}
+
+// ==== АВТОРИЗАЦИЯ ====
+function showLogin() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('mainApp').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('mainApp').style.display = 'flex';
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  try {
+    await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    showApp();
+    await loadAllData();
+    renderDashboard();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function doLogout() {
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  showLogin();
+}
+
+async function checkSession() {
+  try {
+    await api('/api/auth/me');
+    showApp();
+    await loadAllData();
+    renderDashboard();
+  } catch (e) {
+    showLogin();
+  }
+}
+
+document.getElementById('login-password').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') doLogin();
+});
+
+// ==== ЗАГРУЗКА ВСЕХ ДАННЫХ С СЕРВЕРА ====
+async function loadAllData() {
+  const [raw, products, labels, history, invoices, company] = await Promise.all([
+    api('/api/data/raw'),
+    api('/api/data/products'),
+    api('/api/data/labels'),
+    api('/api/data/history'),
+    api('/api/data/invoices'),
+    api('/api/data/company'),
+  ]);
+  state.raw = raw.map(r => ({ id: r.id, name: r.name, qty: Number(r.qty), unit: r.unit, min: Number(r.min_qty), price: Number(r.price) }));
+  state.products = products.map(p => ({ id: p.id, name: p.name, qty: Number(p.qty), unit: p.unit, recipe: p.recipe }));
+  state.labels = labels.map(l => ({ id: l.id, name: l.name, qty: Number(l.qty), min: Number(l.min_qty) }));
+  state.history = history.map(h => ({ id: h.id, date: h.op_date, type: h.op_type, desc: h.description, qty: h.qty_text }));
+  state.invoices = invoices.map(i => ({ id: i.invoice_no, dbId: i.id, date: i.op_date, buyer: i.buyer, buyerAddr: i.buyer_address, note: i.note, total: Number(i.total), items: i.items }));
+  state.company = company || {};
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('section-'+t).classList.add('active');
+  document.getElementById('tab-'+t).classList.add('active');
+  if(t==='dashboard') renderDashboard();
+  if(t==='raw') renderRaw();
+  if(t==='products') renderProducts();
+  if(t==='labels') renderLabels();
+  if(t==='history') renderHistory();
+  if(t==='invoices') renderInvoices();
+  if(t==='finance') renderFinance();
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if(id==='shipmentModal') populateShipmentSelects();
+  if(id==='productionModal') populateProductionSelect();
+  if(id==='createInvoiceModal') { state.invItems=[{name:'',qty:1,unit:'кг',price:0}]; renderInvItems(); }
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function getStatus(qty, min) {
+  if(qty<=0) return {cls:'badge-out',label:'Нет'};
+  if(qty<min) return {cls:'badge-low',label:'Мало'};
+  return {cls:'badge-ok',label:'В норме'};
+}
+
+function gramsToRawUnit(grams, rawUnit) {
+  if(rawUnit === 'кг' || rawUnit === 'л') return grams / 1000;
+  return grams;
+}
+
+function calcProductCost(p) {
+  if(!p.recipe || !p.recipe.length) return 0;
+  return p.recipe.reduce((sum, item) => {
+    const raw = state.raw.find(r=>r.id===item.rawId);
+    if(!raw) return sum;
+    return sum + gramsToRawUnit(item.amount, raw.unit) * (raw.price||0);
+  }, 0);
+}
+
+// ==== ДАШБОРД ====
+function renderDashboard() {
+  const low = state.raw.filter(r=>r.qty>0&&r.qty<r.min).length;
+  const out = state.raw.filter(r=>r.qty<=0).length;
+  const lblOut = state.labels.filter(l=>l.qty<=0).length;
+  const totalProd = state.products.reduce((a,p)=>a+p.qty,0);
+  document.getElementById('dash-metrics').innerHTML = `
+    <div class="metric-card"><div class="metric-label">Позиций сырья</div><div class="metric-val blue">${state.raw.length}</div></div>
+    <div class="metric-card"><div class="metric-label">Заканчивается</div><div class="metric-val amber">${low}</div></div>
+    <div class="metric-card"><div class="metric-label">Нет в наличии</div><div class="metric-val red">${out+lblOut}</div></div>
+    <div class="metric-card"><div class="metric-label">Готовая продукция</div><div class="metric-val green">${totalProd} кг</div></div>`;
+  let alerts = '';
+  state.raw.filter(r=>r.qty<=0).forEach(r=>{ alerts+=`<div class="alert alert-warn">⚠ Закончилось: <strong>${r.name}</strong></div>`; });
+  state.raw.filter(r=>r.qty>0&&r.qty<r.min).forEach(r=>{ alerts+=`<div class="alert alert-info">ℹ Мало: <strong>${r.name}</strong> — ${r.qty} ${r.unit}</div>`; });
+  state.labels.filter(l=>l.qty<=0).forEach(l=>{ alerts+=`<div class="alert alert-warn">⚠ Этикетка закончилась: <strong>${l.name}</strong></div>`; });
+  document.getElementById('dash-alerts').innerHTML = alerts;
+  const recent = state.history.slice(0,6);
+  const ops = recent.map(h=>`<tr><td>${h.date}</td><td><span class="badge badge-ok">${h.type}</span></td><td>${h.desc}</td><td>${h.qty}</td><td><button class="btn btn-sm btn-danger btn-icon" onclick="deleteHistory(${h.id})">✕</button></td></tr>`).join('');
+  document.getElementById('dash-ops').innerHTML = ops ? `<table><thead><tr><th>Дата</th><th>Тип</th><th>Описание</th><th>Кол-во</th><th></th></tr></thead><tbody>${ops}</tbody></table>` : '<div class="empty-state">Операций пока нет</div>';
+}
+
+// ==== СЫРЬЁ ====
+function selectRawRow(id, el){
+  selectedRawId = id;
+  document.querySelectorAll('#raw-tbody tr').forEach(tr=>tr.classList.remove('selected-row'));
+  if(el) el.classList.add('selected-row');
+}
+function renderRaw() {
+  const q = (document.getElementById('raw-search').value||'').toLowerCase();
+  let items = state.raw.filter(r=>r.name.toLowerCase().includes(q));
+  document.getElementById('raw-tbody').innerHTML = items.map((r)=>{
+    const s = getStatus(r.qty,r.min);
+    const pct = Math.min(100,Math.round(r.qty/Math.max(r.min,1)*100));
+    const sel = r.id===selectedRawId ? 'selected-row' : '';
+    return `<tr class="${sel}" onclick="selectRawRow(${r.id}, this)">
+      <td><input class="cell-input" value="${r.name}" onchange="onRawField(${r.id},'name',this.value)"></td>
+      <td><input class="cell-input num" type="number" value="${r.qty}" onchange="onRawField(${r.id},'qty',this.value)"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${r.qty<=0?'#e24b4a':r.qty<r.min?'#ef9f27':'var(--sb-blue)'};"></div></div></td>
+      <td>
+        <select class="cell-input" onchange="onRawField(${r.id},'unit',this.value)">
+          ${['кг','л','шт','г'].map(u=>`<option ${u===r.unit?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </td>
+      <td><input class="cell-input num" type="number" value="${r.min}" onchange="onRawField(${r.id},'min',this.value)"></td>
+      <td><input class="cell-input num" type="number" value="${r.price||0}" onchange="onRawField(${r.id},'price',this.value)" title="Цена за единицу, ₽"></td>
+      <td><span class="badge ${s.cls}">${s.label}</span></td>
+      <td><button class="btn btn-sm btn-danger btn-icon" onclick="event.stopPropagation();deleteRaw(${r.id})">🗑</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="7"><div class="empty-state">Нет позиций</div></td></tr>';
+}
+async function onRawField(id, field, val) {
+  const r = state.raw.find(x=>x.id===id);
+  if(!r) return;
+  const payload = {};
+  if(field==='qty'||field==='min'||field==='price') { r[field] = parseFloat(val)||0; payload[field==='min'?'min_qty':field] = r[field]; }
+  else { r[field] = val; payload[field] = val; }
+  try { await api('/api/data/raw/'+id, { method:'PUT', body: JSON.stringify(payload) }); } catch(e) { alert(e.message); }
+  renderRaw();
+}
+async function saveRaw() {
+  const name = document.getElementById('raw-name-in').value.trim();
+  const qty = parseFloat(document.getElementById('raw-qty-in').value)||0;
+  const unit = document.getElementById('raw-unit-in').value;
+  const min_qty = parseFloat(document.getElementById('raw-min-in').value)||0;
+  const price = parseFloat(document.getElementById('raw-price-in').value)||0;
+  if(!name) return;
+  try {
+    const created = await api('/api/data/raw', { method:'POST', body: JSON.stringify({ name, qty, unit, min_qty, price }) });
+    state.raw.push({ id: created.id, name: created.name, qty: Number(created.qty), unit: created.unit, min: Number(created.min_qty), price: Number(created.price) });
+    ['raw-name-in','raw-qty-in','raw-min-in','raw-price-in'].forEach(id=>document.getElementById(id).value='');
+    closeModal('addRawModal');
+    renderRaw(); renderDashboard();
+  } catch(e) { alert(e.message); }
+}
+async function deleteRaw(id){
+  if(!confirm('Удалить эту позицию сырья?')) return;
+  try { await api('/api/data/raw/'+id, { method:'DELETE' }); state.raw = state.raw.filter(r=>r.id!==id); renderRaw(); renderDashboard(); } catch(e){ alert(e.message); }
+}
+async function moveSelected(section, dir) {
+  if(section==='raw'){
+    if(selectedRawId==null) return;
+    await api('/api/data/raw/reorder', { method:'POST', body: JSON.stringify({ id: selectedRawId, direction: dir }) });
+    const raw = await api('/api/data/raw');
+    state.raw = raw.map(r => ({ id: r.id, name: r.name, qty: Number(r.qty), unit: r.unit, min: Number(r.min_qty), price: Number(r.price) }));
+    renderRaw();
+  }
+  if(section==='products'){
+    if(selectedProdId==null) return;
+    await api('/api/data/products/reorder', { method:'POST', body: JSON.stringify({ id: selectedProdId, direction: dir }) });
+    const products = await api('/api/data/products');
+    state.products = products.map(p => ({ id: p.id, name: p.name, qty: Number(p.qty), unit: p.unit, recipe: p.recipe }));
+    renderProducts();
+  }
+  if(section==='labels'){
+    if(selectedLblId==null) return;
+    await api('/api/data/labels/reorder', { method:'POST', body: JSON.stringify({ id: selectedLblId, direction: dir }) });
+    const labels = await api('/api/data/labels');
+    state.labels = labels.map(l => ({ id: l.id, name: l.name, qty: Number(l.qty), min: Number(l.min_qty) }));
+    renderLabels();
+  }
+}
+
+// ==== ПРОДУКЦИЯ ====
+function selectProdRow(id, el){
+  selectedProdId = id;
+  document.querySelectorAll('#prod-tbody tr').forEach(tr=>tr.classList.remove('selected-row'));
+  if(el) el.classList.add('selected-row');
+}
+function renderProducts() {
+  const q = (document.getElementById('prod-search').value||'').toLowerCase();
+  const items = state.products.filter(p=>p.name.toLowerCase().includes(q));
+  document.getElementById('prod-tbody').innerHTML = items.map((p)=>{
+    const recipeLabel = (p.recipe&&p.recipe.length) ? p.recipe.length+' ингр.' : 'не задана';
+    const sel = p.id===selectedProdId ? 'selected-row' : '';
+    return `<tr class="${sel}" onclick="selectProdRow(${p.id}, this)">
+      <td><input class="cell-input" value="${p.name}" onchange="onProdField(${p.id},'name',this.value)"></td>
+      <td><input class="cell-input num" type="number" value="${p.qty}" onchange="onProdField(${p.id},'qty',this.value)"></td>
+      <td>
+        <select class="cell-input" onchange="onProdField(${p.id},'unit',this.value)">
+          ${['кг','шт','упак.'].map(u=>`<option ${u===p.unit?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </td>
+      <td><button class="btn btn-sm" onclick="event.stopPropagation();openRecipeModal(${p.id})">${recipeLabel}</button></td>
+      <td><button class="btn btn-sm btn-danger btn-icon" onclick="event.stopPropagation();deleteProd(${p.id})">🗑</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5"><div class="empty-state">Нет продуктов</div></td></tr>';
+}
+async function onProdField(id, field, val) {
+  const p = state.products.find(x=>x.id===id);
+  if(!p) return;
+  const payload = {};
+  if(field==='qty') { p.qty = parseFloat(val)||0; payload.qty = p.qty; }
+  else { p[field] = val; payload[field] = val; }
+  try { await api('/api/data/products/'+id, { method:'PUT', body: JSON.stringify(payload) }); } catch(e) { alert(e.message); }
+  renderProducts();
+}
+async function saveProd() {
+  const name = document.getElementById('prod-name-in').value.trim();
+  const qty = parseFloat(document.getElementById('prod-qty-in').value)||0;
+  const unit = document.getElementById('prod-unit-in').value;
+  if(!name) return;
+  try {
+    const created = await api('/api/data/products', { method:'POST', body: JSON.stringify({ name, qty, unit }) });
+    state.products.push({ id: created.id, name: created.name, qty: Number(created.qty), unit: created.unit, recipe: [] });
+    document.getElementById('prod-name-in').value='';
+    document.getElementById('prod-qty-in').value='';
+    closeModal('addProdModal'); renderProducts();
+  } catch(e) { alert(e.message); }
+}
+async function deleteProd(id){
+  if(!confirm('Удалить этот продукт?')) return;
+  try { await api('/api/data/products/'+id, { method:'DELETE' }); state.products = state.products.filter(p=>p.id!==id); renderProducts(); } catch(e){ alert(e.message); }
+}
+
+// ==== ЭТИКЕТКИ ====
+function selectLblRow(id, el){
+  selectedLblId = id;
+  document.querySelectorAll('#lbl-tbody tr').forEach(tr=>tr.classList.remove('selected-row'));
+  if(el) el.classList.add('selected-row');
+}
+function renderLabels() {
+  const q = (document.getElementById('lbl-search').value||'').toLowerCase();
+  const items = state.labels.filter(l=>l.name.toLowerCase().includes(q));
+  document.getElementById('lbl-tbody').innerHTML = items.map((l)=>{
+    const s = getStatus(l.qty,l.min);
+    const sel = l.id===selectedLblId ? 'selected-row' : '';
+    return `<tr class="${sel}" onclick="selectLblRow(${l.id}, this)">
+      <td><input class="cell-input" value="${l.name}" onchange="onLblField(${l.id},'name',this.value)"></td>
+      <td><input class="cell-input num" type="number" value="${l.qty}" onchange="onLblField(${l.id},'qty',this.value)"></td>
+      <td><input class="cell-input num" type="number" value="${l.min}" onchange="onLblField(${l.id},'min',this.value)"></td>
+      <td><span class="badge ${s.cls}">${s.label}</span></td>
+      <td><button class="btn btn-sm btn-danger btn-icon" onclick="event.stopPropagation();deleteLbl(${l.id})">🗑</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5"><div class="empty-state">Нет этикеток</div></td></tr>';
+}
+async function onLblField(id, field, val) {
+  const l = state.labels.find(x=>x.id===id);
+  if(!l) return;
+  const payload = {};
+  if(field==='qty'||field==='min') { l[field] = parseFloat(val)||0; payload[field==='min'?'min_qty':field] = l[field]; }
+  else { l[field] = val; payload[field] = val; }
+  try { await api('/api/data/labels/'+id, { method:'PUT', body: JSON.stringify(payload) }); } catch(e) { alert(e.message); }
+  renderLabels();
+}
+async function saveLbl() {
+  const name = document.getElementById('lbl-name-in').value.trim();
+  const qty = parseInt(document.getElementById('lbl-qty-in').value)||0;
+  const min_qty = parseInt(document.getElementById('lbl-min-in').value)||0;
+  if(!name) return;
+  try {
+    const created = await api('/api/data/labels', { method:'POST', body: JSON.stringify({ name, qty, min_qty }) });
+    state.labels.push({ id: created.id, name: created.name, qty: Number(created.qty), min: Number(created.min_qty) });
+    document.getElementById('lbl-name-in').value='';
+    document.getElementById('lbl-qty-in').value='';
+    document.getElementById('lbl-min-in').value='';
+    closeModal('addLblModal'); renderLabels();
+  } catch(e) { alert(e.message); }
+}
+async function deleteLbl(id){
+  if(!confirm('Удалить эту этикетку?')) return;
+  try { await api('/api/data/labels/'+id, { method:'DELETE' }); state.labels = state.labels.filter(l=>l.id!==id); renderLabels(); } catch(e){ alert(e.message); }
+}
+
+// ==== ИСТОРИЯ ====
+function renderHistory() {
+  document.getElementById('hist-tbody').innerHTML = state.history.map(h=>`<tr><td>${h.date}</td><td><span class="badge badge-ok">${h.type}</span></td><td>${h.desc}</td><td>${h.qty}</td><td><button class="btn btn-sm btn-danger btn-icon" onclick="deleteHistory(${h.id})">✕</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state">История пуста</div></td></tr>';
+}
+async function deleteHistory(id) {
+  try { await api('/api/data/history/'+id, { method:'DELETE' }); state.history = state.history.filter(h=>h.id!==id); renderHistory(); renderDashboard(); } catch(e){ alert(e.message); }
+}
+
+// ==== РЕЦЕПТУРА ====
+function openRecipeModal(id) {
+  editingProductId = id;
+  const p = state.products.find(x=>x.id===id);
+  document.getElementById('recipe-prod-name').textContent = p.name;
+  recipeDraft = p.recipe ? JSON.parse(JSON.stringify(p.recipe)) : [];
+  renderRecipeDraft();
+  openModal('recipeModal');
+}
+function renderRecipeDraft() {
+  document.getElementById('recipe-rows').innerHTML = recipeDraft.map((row,i)=>`
+    <div class="recipe-row">
+      <select onchange="updateRecipeRow(${i},'rawId',this.value)">
+        <option value="">— сырьё —</option>
+        ${state.raw.map(r=>`<option value="${r.id}" ${r.id==row.rawId?'selected':''}>${r.name}</option>`).join('')}
+      </select>
+      <input type="number" placeholder="г на 1 кг" value="${row.amount||''}" oninput="updateRecipeRow(${i},'amount',this.value)">
+      <button class="btn btn-sm btn-danger btn-icon" onclick="removeRecipeRow(${i})">✕</button>
+    </div>`).join('') || '<div class="empty-state">Добавьте сырьё в рецептуру</div>';
+}
+function addRecipeRow() { recipeDraft.push({rawId:'',amount:0}); renderRecipeDraft(); }
+function removeRecipeRow(i) { recipeDraft.splice(i,1); renderRecipeDraft(); }
+function updateRecipeRow(i, field, val) {
+  if(field==='amount') recipeDraft[i][field] = parseFloat(val)||0;
+  else recipeDraft[i][field] = parseInt(val)||'';
+}
+async function saveRecipe() {
+  const recipe = recipeDraft.filter(r=>r.rawId);
+  try {
+    await api('/api/data/products/'+editingProductId+'/recipe', { method:'PUT', body: JSON.stringify({ recipe }) });
+    const p = state.products.find(x=>x.id===editingProductId);
+    p.recipe = recipe;
+    closeModal('recipeModal');
+    renderProducts();
+  } catch(e) { alert(e.message); }
+}
+
+// ==== ВЫПУСК ПРОДУКЦИИ ====
+function populateProductionSelect() {
+  document.getElementById('prod-select').innerHTML = '<option value="">— выберите —</option>'+state.products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  document.getElementById('production-preview').innerHTML = '';
+  document.getElementById('prod-qty-make').value = '';
+}
+function updateProductionPreview() {
+  const id = parseInt(document.getElementById('prod-select').value);
+  const qty = parseFloat(document.getElementById('prod-qty-make').value)||0;
+  const box = document.getElementById('production-preview');
+  const p = state.products.find(x=>x.id===id);
+  if(!p) { box.innerHTML=''; return; }
+  if(!p.recipe || !p.recipe.length) {
+    box.innerHTML = '<div class="alert alert-warn">⚠ У продукта не задана рецептура. Откройте карточку продукта в разделе «Продукция» и нажмите на рецептуру.</div>';
+    return;
+  }
+  const rows = p.recipe.map(item=>{
+    const raw = state.raw.find(r=>r.id===item.rawId);
+    if(!raw) return '';
+    const needed = gramsToRawUnit(item.amount, raw.unit)*qty;
+    const enough = raw.qty >= needed;
+    return `<tr><td>${raw.name}</td><td>${item.amount} г/кг → ${needed.toFixed(3)} ${raw.unit}</td><td class="${enough?'ok-qty':'shortage'}">${raw.qty} ${raw.unit}</td></tr>`;
+  }).join('');
+  box.innerHTML = `<div style="font-size:12px;color:var(--sb-muted);margin:8px 0 4px;">Требуется сырья:</div><table><thead><tr><th>Сырьё</th><th>Нужно</th><th>В наличии</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function processProduction() {
+  const productId = parseInt(document.getElementById('prod-select').value);
+  const qty = parseFloat(document.getElementById('prod-qty-make').value)||0;
+  if(!productId||qty<=0){alert('Выберите продукт и укажите количество');return;}
+  try {
+    await api('/api/data/production', { method:'POST', body: JSON.stringify({ productId, qty }) });
+    await loadAllData();
+    closeModal('productionModal');
+    renderRaw(); renderProducts(); renderDashboard(); renderHistory();
+  } catch(e) { alert(e.message); }
+}
+
+// ==== ОТГРУЗКА ====
+function populateShipmentSelects(){
+  document.getElementById('ship-product').innerHTML='<option value="">— выберите —</option>'+state.products.map(p=>`<option value="${p.id}">${p.name} (${p.qty} ${p.unit})</option>`).join('');
+  document.getElementById('ship-label').innerHTML='<option value="">— без этикетки —</option>'+state.labels.map(l=>`<option value="${l.id}">${l.name} (${l.qty} шт)</option>`).join('');
+}
+async function processShipment(){
+  const productId=parseInt(document.getElementById('ship-product').value);
+  const qty=parseFloat(document.getElementById('ship-qty').value)||0;
+  const client=document.getElementById('ship-client').value||'Клиент';
+  const labelId=parseInt(document.getElementById('ship-label').value)||null;
+  const labelPerUnit=parseInt(document.getElementById('ship-lbl-per').value)||1;
+  if(!productId||qty<=0){alert('Выберите продукт и укажите количество');return;}
+  try {
+    await api('/api/data/shipment', { method:'POST', body: JSON.stringify({ productId, qty, client, labelId, labelPerUnit }) });
+    await loadAllData();
+    closeModal('shipmentModal');
+    renderProducts(); renderLabels(); renderDashboard(); renderHistory();
+  } catch(e) { alert(e.message); }
+}
+
+// ==== РЕКВИЗИТЫ КОМПАНИИ ====
+function openCompanyModal() {
+  const c = state.company;
+  document.getElementById('co-name').value = c.name||'';
+  document.getElementById('co-address').value = c.address||'';
+  document.getElementById('co-inn').value = c.inn||'';
+  document.getElementById('co-kpp').value = c.kpp||'';
+  document.getElementById('co-bank').value = c.bank||'';
+  document.getElementById('co-rs').value = c.rs||'';
+  document.getElementById('co-bik').value = c.bik||'';
+  openModal('companyModal');
+}
+async function saveCompany() {
+  const payload = {
+    name: document.getElementById('co-name').value,
+    address: document.getElementById('co-address').value,
+    inn: document.getElementById('co-inn').value,
+    kpp: document.getElementById('co-kpp').value,
+    bank: document.getElementById('co-bank').value,
+    rs: document.getElementById('co-rs').value,
+    bik: document.getElementById('co-bik').value,
+  };
+  try {
+    await api('/api/data/company', { method:'PUT', body: JSON.stringify(payload) });
+    state.company = payload;
+    closeModal('companyModal');
+  } catch(e) { alert(e.message); }
+}
+
+// ==== СЧЕТА ====
+function renderInvoices() {
+  const el = document.getElementById('invoices-list');
+  if(!state.invoices.length){el.innerHTML='<div class="empty-state">Счетов нет</div>';return;}
+  el.innerHTML = state.invoices.map(inv=>`<div class="card"><div class="card-header"><div><div class="card-title">Счёт ${inv.id} — ${inv.buyer}</div><div style="font-size:12px;color:var(--sb-muted)">${inv.date}</div></div><div style="display:flex;align-items:center;gap:10px;"><div style="font-size:16px;font-weight:600;color:var(--sb-blue)">${inv.total.toLocaleString('ru-RU')} ₽</div><button class="btn btn-sm" onclick="viewInvoice('${inv.id}')">👁 Просмотр</button></div></div></div>`).join('');
+}
+function renderInvItems(){
+  document.getElementById('inv-items-list').innerHTML=state.invItems.map((it,i)=>`<div style="display:grid;grid-template-columns:2fr 1fr 80px 90px 28px;gap:6px;margin-bottom:6px;align-items:end;"><div><label style="font-size:11px;color:var(--sb-muted);">Товар</label><input type="text" value="${it.name}" oninput="state.invItems[${i}].name=this.value" placeholder="Бойлы Z-1"></div><div><label style="font-size:11px;color:var(--sb-muted);">Кол-во</label><input type="number" value="${it.qty}" oninput="state.invItems[${i}].qty=parseFloat(this.value)||0"></div><div><label style="font-size:11px;color:var(--sb-muted);">Ед.</label><input type="text" value="${it.unit}" oninput="state.invItems[${i}].unit=this.value"></div><div><label style="font-size:11px;color:var(--sb-muted);">Цена ₽</label><input type="number" value="${it.price}" oninput="state.invItems[${i}].price=parseFloat(this.value)||0"></div><button class="btn btn-sm btn-danger" onclick="state.invItems.splice(${i},1);renderInvItems();" style="margin-top:16px;">✕</button></div>`).join('');
+}
+function addInvItem(){state.invItems.push({name:'',qty:1,unit:'кг',price:0});renderInvItems();}
+async function createInvoice(){
+  const buyer=document.getElementById('inv-buyer').value.trim()||'Покупатель';
+  const buyer_address=document.getElementById('inv-buyer-addr').value.trim();
+  const note=document.getElementById('inv-note').value.trim();
+  const items=state.invItems.filter(it=>it.name);
+  if(!items.length){alert('Добавьте хотя бы одну позицию');return;}
+  try {
+    await api('/api/data/invoices', { method:'POST', body: JSON.stringify({ buyer, buyer_address, note, items }) });
+    await loadAllData();
+    closeModal('createInvoiceModal'); switchTab('invoices');
+  } catch(e) { alert(e.message); }
+}
+function viewInvoice(invoiceNo){
+  const inv=state.invoices.find(i=>i.id===invoiceNo);
+  if(!inv) return;
+  currentInvoiceId=inv.id;
+  const c = state.company;
+  const rows=inv.items.map(it=>`<tr><td>${it.name}</td><td style="text-align:center">${it.qty}</td><td style="text-align:center">${it.unit}</td><td style="text-align:right">${Number(it.price).toLocaleString('ru-RU')} ₽</td><td style="text-align:right;font-weight:600">${(it.qty*it.price).toLocaleString('ru-RU')} ₽</td></tr>`).join('');
+  const reqLine = [c.inn?('ИНН '+c.inn):'', c.kpp?('КПП '+c.kpp):'', c.bank, c.rs?('р/с '+c.rs):'', c.bik?('БИК '+c.bik):''].filter(Boolean).join(', ');
+  document.getElementById('invoice-preview-content').innerHTML=`<div class="invoice-preview"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;"><div style="display:flex;align-items:center;gap:10px;"><img src="${LOGO_B64}" style="width:48px;height:48px;object-fit:contain;border-radius:50%;"><div><div style="font-size:18px;font-weight:700;color:#1a8fd1;letter-spacing:1px;">${(c.name||'STRIKE BAITS').toUpperCase()}</div><div style="font-size:9px;color:#888;letter-spacing:2px;">HIGH QUALITY CARP FOOD</div></div></div><div style="text-align:right;font-size:12px;color:#555;"><div style="font-size:18px;font-weight:600;color:#0d1b2a;">Счёт ${inv.id}</div><div>Дата: ${inv.date}</div><div style="margin-top:4px;padding:4px 8px;background:#e8f4fd;border-radius:4px;color:#1a8fd1;font-weight:600;">К оплате: ${inv.total.toLocaleString('ru-RU')} ₽</div></div></div><div class="inv-parties"><div class="inv-party"><h4>Продавец</h4><div style="font-weight:600">${c.name||'Strike Baits'}</div><div style="font-size:11px;color:#555">${c.address||''}</div><div style="font-size:11px;color:#555">${reqLine}</div></div><div class="inv-party"><h4>Покупатель</h4><div style="font-weight:600">${inv.buyer}</div><div style="font-size:11px;color:#555">${inv.buyerAddr||''}</div></div></div><table><thead><tr><th>Наименование</th><th style="text-align:center">Кол-во</th><th style="text-align:center">Ед.</th><th style="text-align:right">Цена</th><th style="text-align:right">Сумма</th></tr></thead><tbody>${rows}</tbody></table><div class="inv-total">Итого: <strong>${inv.total.toLocaleString('ru-RU')} ₽</strong></div>${inv.note?`<div style="margin-top:12px;font-size:12px;color:#888;border-top:1px solid #eee;padding-top:8px">${inv.note}</div>`:''}</div>`;
+  openModal('viewInvoiceModal');
+}
+
+// ==== ФИНАНСЫ ====
+function renderFinance() {
+  const rawTotal = state.raw.reduce((sum,r)=>sum + r.qty*(r.price||0), 0);
+  const prodTotal = state.products.reduce((sum,p)=>sum + p.qty*calcProductCost(p), 0);
+  const grandTotal = rawTotal + prodTotal;
+  document.getElementById('finance-metrics').innerHTML = `
+    <div class="metric-card"><div class="metric-label">Сырьё на складе</div><div class="metric-val blue">${rawTotal.toLocaleString('ru-RU',{maximumFractionDigits:0})} ₽</div></div>
+    <div class="metric-card"><div class="metric-label">Готовая продукция</div><div class="metric-val green">${prodTotal.toLocaleString('ru-RU',{maximumFractionDigits:0})} ₽</div></div>
+    <div class="metric-card"><div class="metric-label">Итого на складе</div><div class="metric-val amber">${grandTotal.toLocaleString('ru-RU',{maximumFractionDigits:0})} ₽</div></div>`;
+  document.getElementById('finance-raw-tbody').innerHTML = state.raw.map(r=>{
+    const val = r.qty*(r.price||0);
+    return `<tr><td>${r.name}</td><td>${r.qty} ${r.unit}</td><td>${(r.price||0).toLocaleString('ru-RU')}</td><td style="font-weight:600">${val.toLocaleString('ru-RU',{maximumFractionDigits:0})}</td></tr>`;
+  }).join('') + `<tr style="border-top:2px solid var(--sb-border);"><td colspan="3" style="text-align:right;font-weight:600;">Итого:</td><td style="font-weight:700;color:var(--sb-blue)">${rawTotal.toLocaleString('ru-RU',{maximumFractionDigits:0})} ₽</td></tr>`;
+  document.getElementById('finance-prod-tbody').innerHTML = state.products.map(p=>{
+    const cost = calcProductCost(p);
+    const val = p.qty*cost;
+    const noRecipe = !p.recipe || !p.recipe.length;
+    return `<tr><td>${p.name}${noRecipe?' <span class="badge badge-low">нет рецептуры</span>':''}</td><td>${p.qty} ${p.unit}</td><td>${cost.toLocaleString('ru-RU',{maximumFractionDigits:1})}</td><td style="font-weight:600">${val.toLocaleString('ru-RU',{maximumFractionDigits:0})}</td></tr>`;
+  }).join('') + `<tr style="border-top:2px solid var(--sb-border);"><td colspan="3" style="text-align:right;font-weight:600;">Итого:</td><td style="font-weight:700;color:var(--sb-blue)">${prodTotal.toLocaleString('ru-RU',{maximumFractionDigits:0})} ₽</td></tr>`;
+}
+
+// ==== ИНИЦИАЛИЗАЦИЯ ====
+document.querySelectorAll('.modal-bg').forEach(m=>{ m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}); });
+
+function updateStickyOffsets() {
+  try {
+    const header = document.querySelector('.header');
+    const nav = document.querySelector('.nav');
+    if(!header || !nav) return;
+    const headerH = header.offsetHeight || 61;
+    const navH = nav.offsetHeight || 44;
+    nav.style.top = headerH + 'px';
+    const toolbarTop = (headerH + navH) + 'px';
+    document.querySelectorAll('.sticky-toolbar').forEach(el=>{ el.style.top = toolbarTop; });
+  } catch(e) { console.error('Sticky offset calc failed:', e); }
+}
+window.addEventListener('resize', updateStickyOffsets);
+window.addEventListener('load', updateStickyOffsets);
+document.addEventListener('DOMContentLoaded', updateStickyOffsets);
+updateStickyOffsets();
+setTimeout(updateStickyOffsets, 300);
+
+checkSession();
+</script>
+</body></html>
